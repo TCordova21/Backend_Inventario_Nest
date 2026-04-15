@@ -1,0 +1,190 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model auditoria {
+  id            Int       @id @default(autoincrement())
+  tabla         String    @db.VarChar(100)
+  registro_id   Int?
+  accion        String    @db.VarChar(50)
+  datos_antes   Json?
+  datos_despues Json?
+  usuario_id    Int?
+  fecha         DateTime? @default(now()) @db.Timestamp(6)
+  usuarios      usuarios? @relation(fields: [usuario_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model categorias {
+  id            Int             @id @default(autoincrement())
+  nombre        String          @db.VarChar(100)
+  producto_id   Int
+  productos     productos       @relation(fields: [producto_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  subcategorias subcategorias[]
+
+  @@unique([nombre, producto_id], map: "uq_categoria_producto")
+}
+
+model clientes {
+  id             Int              @id @default(autoincrement())
+  nombre         String           @db.VarChar(150)
+  contacto       String?          @db.VarChar(150)
+  tipo           String?          @db.VarChar(50)
+  activo         Boolean?         @default(true)
+  diseno_cliente diseno_cliente[]
+}
+
+model colores {
+  id           Int            @id @default(autoincrement())
+  nombre       String         @db.VarChar(50)
+  codigo_hex   String         @db.VarChar(7)
+  activo       Boolean?       @default(true)
+  diseno_color diseno_color[]
+
+  @@unique([nombre, codigo_hex])
+}
+
+model detalle_ventas {
+  id              Int      @id @default(autoincrement())
+  venta_id        Int?
+  cantidad        Int
+  precio_unitario Decimal  @db.Decimal(10, 2)
+  diseno_id       Int?
+  disenos         disenos? @relation(fields: [diseno_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ventas          ventas?  @relation(fields: [venta_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([diseno_id], map: "idx_detalle_ventas_diseno")
+}
+
+model diseno_cliente {
+  id         Int       @id @default(autoincrement())
+  diseno_id  Int?
+  cliente_id Int?
+  exclusivo  Boolean?  @default(false)
+  clientes   clientes? @relation(fields: [cliente_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  disenos    disenos?  @relation(fields: [diseno_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([diseno_id, cliente_id])
+}
+
+model diseno_color {
+  id          Int      @id @default(autoincrement())
+  diseno_id   Int?
+  color_id    Int?
+  descripcion String?  @db.VarChar(150)
+  colores     colores? @relation(fields: [color_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  disenos     disenos? @relation(fields: [diseno_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([diseno_id, color_id])
+  @@index([diseno_id], map: "idx_diseno_color")
+}
+
+model disenos {
+  id                     Int                      @id @default(autoincrement())
+  nombre                 String                   @db.VarChar(150)
+  imagen                 String?
+  descripcion            String?
+  codigo                 String?                  @db.VarChar(50)
+  activo                 Boolean?                 @default(true)
+  subcategoria_id        Int?
+  precio                 Decimal?                 @db.Decimal(10, 2)
+  detalle_ventas         detalle_ventas[]
+  diseno_cliente         diseno_cliente[]
+  diseno_color           diseno_color[]
+  subcategorias          subcategorias?           @relation(fields: [subcategoria_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  inventario             inventario[]
+  movimientos_inventario movimientos_inventario[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model inventario {
+  id             Int         @id @default(autoincrement())
+  sucursal_id    Int?
+  cantidad       Int         @default(0)
+  stock_minimo   Int?        @default(0)
+  stock_maximo   Int?
+  actualizado_en DateTime?   @default(now()) @db.Timestamp(6)
+  diseno_id      Int?
+  disenos        disenos?    @relation(fields: [diseno_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  sucursales     sucursales? @relation(fields: [sucursal_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([diseno_id, sucursal_id], map: "uq_inventario_diseno_sucursal")
+  @@index([sucursal_id], map: "idx_inventario_sucursal")
+  @@index([diseno_id], map: "idx_inventario_diseno")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model movimientos_inventario {
+  id                                                                Int         @id @default(autoincrement())
+  sucursal_origen_id                                                Int?
+  sucursal_destino_id                                               Int?
+  tipo_movimiento                                                   String      @db.VarChar(50)
+  cantidad                                                          Int
+  referencia                                                        String?     @db.VarChar(150)
+  observacion                                                       String?
+  fecha                                                             DateTime?   @default(now()) @db.Timestamp(6)
+  usuario_id                                                        Int?
+  diseno_id                                                         Int?
+  disenos                                                           disenos?    @relation(fields: [diseno_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sucursales_movimientos_inventario_sucursal_destino_idTosucursales sucursales? @relation("movimientos_inventario_sucursal_destino_idTosucursales", fields: [sucursal_destino_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sucursales_movimientos_inventario_sucursal_origen_idTosucursales  sucursales? @relation("movimientos_inventario_sucursal_origen_idTosucursales", fields: [sucursal_origen_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  usuarios                                                          usuarios?   @relation(fields: [usuario_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([fecha], map: "idx_movimientos_fecha")
+  @@index([diseno_id], map: "idx_movimientos_diseno")
+}
+
+model productos {
+  id          Int          @id @default(autoincrement())
+  nombre      String       @db.VarChar(100)
+  descripcion String?
+  categorias  categorias[]
+}
+
+model roles {
+  id       Int        @id @default(autoincrement())
+  nombre   String     @unique @db.VarChar(50)
+  usuarios usuarios[]
+}
+
+model subcategorias {
+  id           Int         @id @default(autoincrement())
+  nombre       String      @db.VarChar(100)
+  categoria_id Int?
+  disenos      disenos[]
+  categorias   categorias? @relation(fields: [categoria_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model sucursales {
+  id                                                                            Int                      @id @default(autoincrement())
+  nombre                                                                        String                   @db.VarChar(100)
+  tipo                                                                          String?                  @db.VarChar(50)
+  direccion                                                                     String?
+  activo                                                                        Boolean?                 @default(true)
+  inventario                                                                    inventario[]
+  movimientos_inventario_movimientos_inventario_sucursal_destino_idTosucursales movimientos_inventario[] @relation("movimientos_inventario_sucursal_destino_idTosucursales")
+  movimientos_inventario_movimientos_inventario_sucursal_origen_idTosucursales  movimientos_inventario[] @relation("movimientos_inventario_sucursal_origen_idTosucursales")
+}
+
+model usuarios {
+  id                     Int                      @id @default(autoincrement())
+  nombre                 String                   @db.VarChar(100)
+  email                  String                   @unique @db.VarChar(100)
+  password               String
+  activo                 Boolean?                 @default(true)
+  ultimo_acceso          DateTime?                @db.Timestamp(6)
+  rol_id                 Int?
+  auditoria              auditoria[]
+  movimientos_inventario movimientos_inventario[]
+  roles                  roles?                   @relation(fields: [rol_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model ventas {
+  id             Int              @id @default(autoincrement())
+  fecha          DateTime?        @default(now()) @db.Timestamp(6)
+  total          Decimal?         @db.Decimal(10, 2)
+  detalle_ventas detalle_ventas[]
+}
