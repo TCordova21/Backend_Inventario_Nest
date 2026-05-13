@@ -16,7 +16,7 @@ async function bootstrap() {
   SwaggerModule.setup('api', app, document);
 
     app.enableCors({
-    origin: 'http://localhost:5173',  // URL de tu frontend
+    origin: 'https://inventario-eight.vercel.app/',  // URL de tu frontend
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     credentials: true,
   })
