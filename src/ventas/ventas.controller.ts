@@ -1,6 +1,6 @@
-import { Controller, Post, Body, Get, Param, ParseIntPipe, Patch, Query, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, Get, Param, ParseIntPipe, Patch, Query, UseGuards, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { CreateVentaDto } from './dto/create-venta.dto';
+import { CreateVentaDto, ProcessDevolucionDto } from './dto/create-venta.dto';
 import { VentasService } from './ventas.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'; // Ajusta la ruta según tu proyecto
 import { GetUser } from '../auth/decorators/get-user.decorator'; // Ajusta la ruta según tu proyecto
@@ -39,21 +39,14 @@ export class VentasController {
     return this.service.findOne(id, user);
   }
 
-  @Patch(':id/devolucion')
-  @ApiOperation({ summary: 'Procesar devolución de una venta' })
-  processDevolucion(
-    @Param('id', ParseIntPipe) id: number,
-    @GetUser() user: any
-  ) {
-    return this.service.processDevolucion(id, user);
-  }
+@Patch(':id/devolucion')
+async procesarDevolucion(
+  @Param('id') id: string,
+  @Body() dto: ProcessDevolucionDto,
+  @Req() req: any
+) {
+  return this.service.processDevolucion(+id, dto, req.user);
+}
 
-  @Patch(':id/cancelar')
-  @ApiOperation({ summary: 'Cancelar una venta (Alias de devolución)' })
-  cancel(
-    @Param('id', ParseIntPipe) id: number,
-    @GetUser() user: any
-  ) {
-    return this.service.processDevolucion(id, user); 
-  }
+
 }

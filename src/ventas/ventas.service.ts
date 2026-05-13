@@ -1,5 +1,5 @@
 import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
-import { CreateVentaDto } from './dto/create-venta.dto';
+import { CreateVentaDto, ProcessDevolucionDto } from './dto/create-venta.dto';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -87,7 +87,9 @@ export class VentasService {
     });
   }
 
-  async processDevolucion(id: number, user: any) { // Añadido parámetro user
+async processDevolucion(id: number, data: ProcessDevolucionDto, user: any) {
+    const { items } = data;
+
     const venta = await this.prisma.ventas.findUnique({
       where: { id },
       include: { detalle_ventas: true }
@@ -100,17 +102,44 @@ export class VentasService {
       throw new ForbiddenException('No tienes permiso para devolver esta venta');
     }
 
-    if (venta.estado !== 'COMPLETADA') {
-      throw new BadRequestException(`No se puede devolver una venta en estado ${venta.estado}`);
+    // Permitir devoluciones si está COMPLETADA o ya tiene alguna devolución parcial
+    const estadosPermitidos = ['COMPLETADA', 'PARCIALMENTE_DEVUELTA'];
+    if (!estadosPermitidos.includes(venta.estado)) {
+      throw new BadRequestException(`No se puede procesar devolución en estado ${venta.estado}`);
     }
 
     return this.prisma.$transaction(async (tx) => {
-      for (const detalle of venta.detalle_ventas) {
+      for (const item of items) {
+        const detalle = venta.detalle_ventas.find(d => d.id === item.detalle_venta_id);
+        
+        if (!detalle) {
+          throw new BadRequestException(`El item con ID ${item.detalle_venta_id} no pertenece a esta venta`);
+        }
+
+        // Validar que no se devuelva más de lo que queda disponible para devolver
+        const cantidadYaDevuelta = detalle.cantidad_devuelta || 0;
+        const cantidadDisponibleParaDevolver = detalle.cantidad - cantidadYaDevuelta;
+
+        if (item.cantidad > cantidadDisponibleParaDevolver) {
+          throw new BadRequestException(
+            `Cantidad excedida para ${detalle.nodo_id}. Comprado: ${detalle.cantidad}, Ya devuelto: ${cantidadYaDevuelta}, Intento: ${item.cantidad}`
+          );
+        }
+
+        // 1. Actualizar el detalle de la venta (Sumar a la cantidad devuelta)
+        await tx.detalle_ventas.update({
+          where: { id: item.detalle_venta_id },
+          data: {
+            cantidad_devuelta: { increment: item.cantidad }
+          }
+        });
+
+        // 2. Devolver Stock al Inventario
         const inv = await tx.inventario.findFirst({
           where: {
             nodo_id: detalle.nodo_id,
             sucursal_id: venta.sucursal_id,
-            diseno_id: null
+            diseno_id: null // Ajustado a tu lógica de ventas actual
           }
         });
 
@@ -118,32 +147,45 @@ export class VentasService {
           await tx.inventario.update({
             where: { id: inv.id },
             data: {
-              cantidad: { increment: detalle.cantidad },
+              cantidad: { increment: item.cantidad },
               actualizado_en: new Date()
             }
           });
-
-          await tx.movimientos_inventario.create({
-            data: {
-              nodo_id: detalle.nodo_id,
-              sucursal_destino_id: venta.sucursal_id,
-              tipo_movimiento: 'DEVOLUCION',
-              cantidad: detalle.cantidad,
-              usuario_id: user.id, // Registramos quién hace la devolución
-              referencia: `Devolución de Venta #${venta.id}`,
-              estado: 'COMPLETADO',
-            }
-          });
         }
+
+        // 3. Registrar Movimiento (Kardex)
+        await tx.movimientos_inventario.create({
+          data: {
+            nodo_id: detalle.nodo_id,
+            sucursal_destino_id: venta.sucursal_id,
+            tipo_movimiento: 'DEVOLUCION',
+            cantidad: item.cantidad,
+            usuario_id: user.id,
+            referencia: `Devolución parcial Venta #${venta.id}`,
+            estado: 'COMPLETADO',
+          }
+        });
+      }
+
+      // 4. Recalcular estado global de la venta
+      const detallesActualizados = await tx.detalle_ventas.findMany({
+        where: { venta_id: id }
+      });
+
+      const totalVendido = detallesActualizados.reduce((acc, d) => acc + d.cantidad, 0);
+      const totalDevuelto = detallesActualizados.reduce((acc, d) => acc + (d.cantidad_devuelta || 0), 0);
+
+      let nuevoEstadoVenta: any = 'PARCIALMENTE_DEVUELTA';
+      if (totalDevuelto === totalVendido) {
+        nuevoEstadoVenta = 'DEVUELTA';
       }
 
       return tx.ventas.update({
         where: { id },
-        data: { estado: 'DEVUELTA' }
+        data: { estado: nuevoEstadoVenta }
       });
     });
   }
-
   async findOne(id: number, user: any) { // Añadido parámetro user
     const venta = await this.prisma.ventas.findUnique({
       where: { id },
@@ -153,7 +195,7 @@ export class VentasService {
         detalle_ventas: {
           include: {
             disenos: { select: { nombre: true, codigo: true } },
-            nodos: { select: { nombre: true } }
+            nodos: { select: { nombre: true, imagen: true } }
           }
         }
       }
@@ -181,7 +223,8 @@ export class VentasService {
       orderBy: { fecha: 'desc' },
       include: {
         sucursales: true,
-        usuarios: { select: { nombre: true } }
+        usuarios: { select: { nombre: true } },
+        
       }
     });
   }

@@ -6,8 +6,6 @@ import { Request } from 'express';
 @Injectable()
 export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh') {
   constructor() {
-      console.log('🟡 JWT_REFRESH_SECRET STRATEGY:')
-  console.log(process.env.JWT_REFRESH_SECRET)
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       secretOrKey: process.env.JWT_REFRESH_SECRET,

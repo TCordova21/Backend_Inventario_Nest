@@ -38,15 +38,16 @@ model colores {
 }
 
 model detalle_ventas {
-  id              Int      @id @default(autoincrement())
-  venta_id        Int?
-  cantidad        Int
-  precio_unitario Decimal  @db.Decimal(10, 2)
-  diseno_id       Int?
-  nodo_id         Int
-  disenos         disenos? @relation(fields: [diseno_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  nodos           nodos    @relation(fields: [nodo_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  ventas          ventas?  @relation(fields: [venta_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id                Int      @id @default(autoincrement())
+  venta_id          Int?
+  cantidad          Int
+  precio_unitario   Decimal  @db.Decimal(10, 2)
+  diseno_id         Int?
+  nodo_id           Int
+  cantidad_devuelta Int?     @default(0)
+  disenos           disenos? @relation(fields: [diseno_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  nodos             nodos    @relation(fields: [nodo_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ventas            ventas?  @relation(fields: [venta_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([diseno_id], map: "idx_detalle_ventas_diseno")
 }
@@ -224,4 +225,5 @@ enum estado_venta {
   PENDIENTE
   DEVUELTA
   CANCELADA
+  PARCIALMENTE_DEVUELTA
 }

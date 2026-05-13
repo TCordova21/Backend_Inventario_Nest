@@ -39,3 +39,12 @@ export class CreateVentaDto {
   @IsPositive()
   sucursal_id!: number;
 }
+
+export class DevolucionItemDto {
+  @IsInt() detalle_venta_id!: number;
+  @IsInt() @IsPositive() cantidad!: number;
+}
+
+export class ProcessDevolucionDto {
+  @IsArray() @ValidateNested({ each: true }) @Type(() => DevolucionItemDto) items!: DevolucionItemDto[];
+}
